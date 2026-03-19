@@ -20,6 +20,7 @@ interface PnLRow {
   gross_profit: number
   gross_margin_pct: number
   allocated_opex: number
+  commissions: number
   net_profit: number
   net_margin_pct: number
 }
@@ -60,7 +61,7 @@ function profitColor(v: number) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function PnL() {
-  const { deliveries, allItems, allSales, allAllocations, loading } = usePnL()
+  const { deliveries, allItems, allSales, allAllocations, allCommissions, loading } = usePnL()
 
   useEffect(() => {
     document.title = 'P&L | SeedFlow'
@@ -115,6 +116,11 @@ export function PnL() {
       allocByDelivery.set(a.delivery_id, (allocByDelivery.get(a.delivery_id) ?? 0) + a.allocated_amount_usd)
     }
 
+    const commissionsByDelivery = new Map<string, number>()
+    for (const c of allCommissions) {
+      commissionsByDelivery.set(c.delivery_id, (commissionsByDelivery.get(c.delivery_id) ?? 0) + c.amount_usd)
+    }
+
     return deliveries
       .map((delivery) => {
         const sup = (delivery as unknown as { supplier?: { name: string } }).supplier
@@ -129,44 +135,46 @@ export function PnL() {
         const gross_profit = revenue - cogs
         const gross_margin_pct = revenue > 0 ? (gross_profit / revenue) * 100 : 0
         const allocated_opex = allocByDelivery.get(delivery.id) ?? 0
-        const net_profit = gross_profit - allocated_opex
+        const commissions = commissionsByDelivery.get(delivery.id) ?? 0
+        const net_profit = gross_profit - allocated_opex - commissions
         const net_margin_pct = revenue > 0 ? (net_profit / revenue) * 100 : 0
         return {
           deliveryId: delivery.id,
           invoiceNumber: delivery.invoice_number,
           supplierName: sup?.name ?? '—',
-          revenue, cogs, gross_profit, gross_margin_pct, allocated_opex, net_profit, net_margin_pct,
+          revenue, cogs, gross_profit, gross_margin_pct, allocated_opex, commissions, net_profit, net_margin_pct,
         }
       })
-      .filter((r) => r.revenue > 0 || r.cogs > 0 || r.allocated_opex > 0)
-  }, [deliveries, allItems, allSales, allAllocations, filterSale, filterAlloc])
+      .filter((r) => r.revenue > 0 || r.cogs > 0 || r.allocated_opex > 0 || r.commissions > 0)
+  }, [deliveries, allItems, allSales, allAllocations, allCommissions, filterSale, filterAlloc])
 
   const totals = useMemo(() => ({
     revenue: pnlRows.reduce((s, r) => s + r.revenue, 0),
     cogs: pnlRows.reduce((s, r) => s + r.cogs, 0),
     gross_profit: pnlRows.reduce((s, r) => s + r.gross_profit, 0),
     allocated_opex: pnlRows.reduce((s, r) => s + r.allocated_opex, 0),
+    commissions: pnlRows.reduce((s, r) => s + r.commissions, 0),
     net_profit: pnlRows.reduce((s, r) => s + r.net_profit, 0),
   }), [pnlRows])
 
   const handleExport = () => {
     const headers = [
       'Delivery', 'Supplier', 'Revenue (USD)', 'COGS (USD)',
-      'Gross Profit', 'Gross Margin %', 'Allocated OpEx', 'Net Profit', 'Net Margin %',
+      'Gross Profit', 'Gross Margin %', 'Allocated OpEx', 'Commissions', 'Net Profit', 'Net Margin %',
     ]
     const rows = pnlRows.map((r) => [
       r.invoiceNumber ?? '—',
       r.supplierName,
       r.revenue, r.cogs, r.gross_profit,
       `${r.gross_margin_pct.toFixed(1)}%`,
-      r.allocated_opex, r.net_profit,
+      r.allocated_opex, r.commissions, r.net_profit,
       `${r.net_margin_pct.toFixed(1)}%`,
     ])
     const totalRow = [
       'TOTAL', '',
       totals.revenue, totals.cogs, totals.gross_profit,
       totals.revenue > 0 ? `${((totals.gross_profit / totals.revenue) * 100).toFixed(1)}%` : '—',
-      totals.allocated_opex, totals.net_profit,
+      totals.allocated_opex, totals.commissions, totals.net_profit,
       totals.revenue > 0 ? `${((totals.net_profit / totals.revenue) * 100).toFixed(1)}%` : '—',
     ]
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows, totalRow])
@@ -240,7 +248,7 @@ export function PnL() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
-                {['Delivery', 'Supplier', 'Revenue', 'COGS', 'Gross Profit', 'GM %', 'Alloc. OpEx', 'Net Profit', 'NM %'].map((h) => (
+                {['Delivery', 'Supplier', 'Revenue', 'COGS', 'Gross Profit', 'GM %', 'Alloc. OpEx', 'Commissions', 'Net Profit', 'NM %'].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
                     {h}
                   </th>
@@ -259,6 +267,7 @@ export function PnL() {
                   <td className={`px-4 py-3 font-semibold ${profitColor(row.gross_profit)}`}>{formatUSD(row.gross_profit)}</td>
                   <td className={`px-4 py-3 font-medium ${profitColor(row.gross_margin_pct)}`}>{formatPct(row.gross_margin_pct)}</td>
                   <td className="px-4 py-3 text-gray-600">{formatUSD(row.allocated_opex)}</td>
+                  <td className="px-4 py-3 text-gray-600">{row.commissions > 0 ? formatUSD(row.commissions) : <span className="text-gray-400">—</span>}</td>
                   <td className={`px-4 py-3 font-semibold ${profitColor(row.net_profit)}`}>{formatUSD(row.net_profit)}</td>
                   <td className={`px-4 py-3 font-medium ${profitColor(row.net_margin_pct)}`}>{formatPct(row.net_margin_pct)}</td>
                 </tr>
@@ -274,6 +283,7 @@ export function PnL() {
                   {totals.revenue > 0 ? formatPct((totals.gross_profit / totals.revenue) * 100) : '—'}
                 </td>
                 <td className="px-4 py-3 text-gray-600">{formatUSD(totals.allocated_opex)}</td>
+                <td className="px-4 py-3 text-gray-600">{totals.commissions > 0 ? formatUSD(totals.commissions) : <span className="text-gray-400">—</span>}</td>
                 <td className={`px-4 py-3 ${profitColor(totals.net_profit)}`}>{formatUSD(totals.net_profit)}</td>
                 <td className={`px-4 py-3 ${profitColor(totals.net_profit)}`}>
                   {totals.revenue > 0 ? formatPct((totals.net_profit / totals.revenue) * 100) : '—'}

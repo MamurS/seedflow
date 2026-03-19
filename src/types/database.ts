@@ -328,31 +328,71 @@ export interface SaleUpdate extends Partial<Omit<SaleInsert, 'dealer_id' | 'deli
 
 export interface Inkasso {
   id: string
-  sale_id: string
   inkasso_date: string
-  cash_received: number
-  registered_amount_uzs: number | null
-  deposited_to_bank_uzs: number | null
-  difference_uzs: number | null
+  total_amount_uzs: number
+  notes: string | null
+  created_at: string
+}
+
+export interface InkassoInsert {
+  inkasso_date: string
+  total_amount_uzs: number
+  notes?: string | null
+}
+
+export interface InkassoUpdate extends Partial<InkassoInsert> {}
+
+// ─── Cash Register ────────────────────────────────────────────────────────────
+
+export interface CashRegister {
+  id: string
+  delivery_item_id: string
+  register_date: string
+  packs_registered: number
+  amount_uzs: number
   receipt_number: string | null
   notes: string | null
   created_at: string
   // joined
-  sale?: Sale
+  delivery_item?: DeliveryItem
 }
 
-export interface InkassoInsert {
-  sale_id: string
-  inkasso_date: string
-  cash_received: number
-  registered_amount_uzs?: number | null
-  deposited_to_bank_uzs?: number | null
-  difference_uzs?: number | null
+export interface CashRegisterInsert {
+  delivery_item_id: string
+  register_date: string
+  packs_registered: number
+  amount_uzs: number
   receipt_number?: string | null
   notes?: string | null
 }
 
-export interface InkassoUpdate extends Partial<Omit<InkassoInsert, 'sale_id'>> {}
+export interface CashRegisterUpdate extends Partial<Omit<CashRegisterInsert, 'delivery_item_id'>> {}
+
+// ─── Supplier Commissions ────────────────────────────────────────────────────
+
+export type CommissionType = 'supplier' | 'manager'
+
+export interface SupplierCommission {
+  id: string
+  delivery_id: string
+  commission_type: CommissionType
+  amount_usd: number
+  description: string | null
+  paid: boolean
+  paid_date: string | null
+  created_at: string
+}
+
+export interface SupplierCommissionInsert {
+  delivery_id: string
+  commission_type: CommissionType
+  amount_usd: number
+  description?: string | null
+  paid?: boolean
+  paid_date?: string | null
+}
+
+export interface SupplierCommissionUpdate extends Partial<Omit<SupplierCommissionInsert, 'delivery_id'>> {}
 
 export interface ExchangeRate {
   id: string

@@ -5,12 +5,14 @@ import { useDelivery } from '../hooks/useDeliveries'
 import { useDeliveryItems } from '../hooks/useDeliveryItems'
 import { useDeliveryCosts } from '../hooks/useDeliveryCosts'
 import { useProducts } from '../hooks/useProducts'
+import { useSupplierCommissions } from '../hooks/useSupplierCommissions'
 import { calcLandedCost, calcRecommendedPrice, calcSellableQty } from '../lib/calculations'
 import { COST_TYPES, DELIVERY_STATUSES } from '../lib/constants'
 import type {
   DeliveryItem, DeliveryItemInsert, DeliveryItemUpdate,
   DeliveryCost, DeliveryCostInsert, DeliveryCostUpdate,
-  CostType, Currency,
+  SupplierCommission, SupplierCommissionInsert,
+  CostType, Currency, CommissionType,
 } from '../types/database'
 import { supabase } from '../lib/supabase'
 import { toast } from '../components/ui/Toast'
@@ -23,7 +25,7 @@ import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { formatDate, formatUSD, formatUZS, formatPct, formatNumber } from '../lib/formatters'
 
-type Tab = 'items' | 'costs' | 'landed' | 'pricing' | 'timeline'
+type Tab = 'items' | 'costs' | 'landed' | 'pricing' | 'timeline' | 'commissions'
 
 const STATUS_BADGE_MAP: Record<string, 'neutral' | 'info' | 'indigo' | 'warning' | 'orange' | 'teal' | 'success'> = {
   ordered: 'neutral', invoiced: 'info', paid: 'indigo',
@@ -59,6 +61,7 @@ export function DeliveryDetail() {
   const { items, loading: itemsLoading, refetch: refetchItems, create: createItem, update: updateItem, remove: removeItem } = useDeliveryItems(id)
   const { costs, loading: costsLoading, create: createCost, update: updateCost, remove: removeCost } = useDeliveryCosts(id)
   const { products } = useProducts()
+  const { commissions, loading: commissionsLoading, create: createCommission, update: updateCommission, remove: removeCommission, totalUsd: totalCommissionsUsd } = useSupplierCommissions(id)
 
   // Item panel state
   const [itemPanelOpen, setItemPanelOpen] = useState(false)
@@ -77,6 +80,17 @@ export function DeliveryDetail() {
   const [savingCost, setSavingCost] = useState(false)
   const [deleteCost, setDeleteCost] = useState<DeliveryCost | null>(null)
   const [deletingCost, setDeletingCost] = useState(false)
+
+  // Commission panel state
+  const [commissionPanelOpen, setCommissionPanelOpen] = useState(false)
+  const [editingCommission, setEditingCommission] = useState<SupplierCommission | null>(null)
+  const [commissionForm, setCommissionForm] = useState<{
+    commission_type: CommissionType; amount_usd: string; description: string; paid: boolean; paid_date: string
+  }>({ commission_type: 'supplier', amount_usd: '', description: '', paid: false, paid_date: '' })
+  const [commissionErrors, setCommissionErrors] = useState<Partial<Record<string, string>>>({})
+  const [savingCommission, setSavingCommission] = useState(false)
+  const [deleteCommission, setDeleteCommission] = useState<SupplierCommission | null>(null)
+  const [deletingCommission, setDeletingCommission] = useState(false)
 
   // Landed cost recalculate state
   const [recalculating, setRecalculating] = useState(false)
@@ -205,6 +219,68 @@ export function DeliveryDetail() {
     setDeleteCost(null)
   }
 
+  // ── Commission handlers ───────────────────────────────────────────────────────
+  const openCommissionCreate = () => {
+    setEditingCommission(null)
+    setCommissionForm({ commission_type: 'supplier', amount_usd: '', description: '', paid: false, paid_date: '' })
+    setCommissionErrors({})
+    setCommissionPanelOpen(true)
+  }
+
+  const openCommissionEdit = (c: SupplierCommission) => {
+    setEditingCommission(c)
+    setCommissionForm({
+      commission_type: c.commission_type,
+      amount_usd: String(c.amount_usd),
+      description: c.description ?? '',
+      paid: c.paid,
+      paid_date: c.paid_date ?? '',
+    })
+    setCommissionErrors({})
+    setCommissionPanelOpen(true)
+  }
+
+  const validateCommission = () => {
+    const e: typeof commissionErrors = {}
+    if (!commissionForm.amount_usd || Number(commissionForm.amount_usd) <= 0) e.amount_usd = 'Amount must be > 0'
+    setCommissionErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  const handleSaveCommission = async () => {
+    if (!validateCommission() || !id) return
+    setSavingCommission(true)
+    if (editingCommission) {
+      await updateCommission(editingCommission.id, {
+        commission_type: commissionForm.commission_type,
+        amount_usd: Number(commissionForm.amount_usd),
+        description: commissionForm.description.trim() || null,
+        paid: commissionForm.paid,
+        paid_date: commissionForm.paid_date || null,
+      })
+    } else {
+      const payload: SupplierCommissionInsert = {
+        delivery_id: id,
+        commission_type: commissionForm.commission_type,
+        amount_usd: Number(commissionForm.amount_usd),
+        description: commissionForm.description.trim() || null,
+        paid: commissionForm.paid,
+        paid_date: commissionForm.paid_date || null,
+      }
+      await createCommission(payload)
+    }
+    setSavingCommission(false)
+    setCommissionPanelOpen(false)
+  }
+
+  const handleDeleteCommission = async () => {
+    if (!deleteCommission) return
+    setDeletingCommission(true)
+    await removeCommission(deleteCommission.id)
+    setDeletingCommission(false)
+    setDeleteCommission(null)
+  }
+
   // ── Landed Cost Recalculate ───────────────────────────────────────────────────
   const handleRecalculate = async () => {
     if (!delivery || items.length === 0) return
@@ -278,7 +354,7 @@ export function DeliveryDetail() {
       {/* Tabs */}
       <div className="border-b border-gray-200">
         <nav className="flex gap-1 -mb-px">
-          {(['items', 'costs', 'landed', 'pricing', 'timeline'] as Tab[]).map((tab) => (
+          {(['items', 'costs', 'landed', 'pricing', 'timeline', 'commissions'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -289,7 +365,9 @@ export function DeliveryDetail() {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
               ].join(' ')}
             >
-              {tab === 'landed' ? 'Landed Cost' : tab}
+              {tab === 'landed' ? 'Landed Cost' : tab === 'commissions'
+                ? `Commissions${commissions.length > 0 ? ` (${commissions.length})` : ''}`
+                : tab}
             </button>
           ))}
         </nav>
@@ -608,6 +686,83 @@ export function DeliveryDetail() {
         </div>
       )}
 
+      {/* ── Commissions Tab ── */}
+      {activeTab === 'commissions' && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Total commissions:{' '}
+              <span className="font-semibold text-gray-900">{formatUSD(totalCommissionsUsd)}</span>
+              {totalCommissionsUsd > 0 && (
+                <span className="text-xs text-gray-400 ml-2">(subtracted from net profit)</span>
+              )}
+            </div>
+            <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={openCommissionCreate}>
+              Add Commission
+            </Button>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Description</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount (USD)</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Paid</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Paid Date</th>
+                  <th className="w-20" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {commissionsLoading ? (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Loading...</td></tr>
+                ) : commissions.length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No commissions recorded for this delivery.</td></tr>
+                ) : (
+                  commissions.map((c) => (
+                    <tr key={c.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <span className={[
+                          'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                          c.commission_type === 'supplier'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-purple-100 text-purple-800',
+                        ].join(' ')}>
+                          {c.commission_type === 'supplier' ? 'Supplier' : 'Manager'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{c.description ?? '—'}</td>
+                      <td className="px-4 py-3 text-right font-medium text-gray-900">{formatUSD(c.amount_usd)}</td>
+                      <td className="px-4 py-3 text-center">
+                        {c.paid
+                          ? <CheckCircle size={16} className="text-green-600 mx-auto" />
+                          : <span className="text-xs text-gray-400">Unpaid</span>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{c.paid_date ? formatDate(c.paid_date) : '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openCommissionEdit(c)} className="rounded p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Pencil size={14} /></button>
+                          <button onClick={() => setDeleteCommission(c)} className="rounded p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {commissions.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-gray-200 bg-gray-50">
+                    <td colSpan={2} className="px-4 py-3 font-semibold text-gray-700">Total</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatUSD(totalCommissionsUsd)}</td>
+                    <td colSpan={3} />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ── Item Panel ── */}
       <SidePanel open={itemPanelOpen} title={editingItem ? 'Edit Item' : 'Add Item'} onClose={() => setItemPanelOpen(false)}>
         <div className="flex flex-col gap-4">
@@ -738,6 +893,59 @@ export function DeliveryDetail() {
         </div>
       </SidePanel>
 
+      {/* ── Commission Panel ── */}
+      <SidePanel open={commissionPanelOpen} title={editingCommission ? 'Edit Commission' : 'Add Commission'} onClose={() => setCommissionPanelOpen(false)}>
+        <div className="flex flex-col gap-4">
+          <Select
+            label="Commission Type"
+            value={commissionForm.commission_type}
+            onChange={(e) => setCommissionForm((f) => ({ ...f, commission_type: e.target.value as CommissionType }))}
+            options={[
+              { value: 'supplier', label: 'Supplier Commission (e.g. Syngenta)' },
+              { value: 'manager', label: 'Manager Commission' },
+            ]}
+          />
+          <Input
+            label="Amount (USD)"
+            type="number"
+            value={commissionForm.amount_usd}
+            onChange={(e) => setCommissionForm((f) => ({ ...f, amount_usd: e.target.value }))}
+            error={commissionErrors.amount_usd}
+            required
+          />
+          <Input
+            label="Description"
+            value={commissionForm.description}
+            onChange={(e) => setCommissionForm((f) => ({ ...f, description: e.target.value }))}
+            placeholder="e.g. Syngenta delivery commission"
+          />
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="commission-paid"
+              checked={commissionForm.paid}
+              onChange={(e) => setCommissionForm((f) => ({ ...f, paid: e.target.checked }))}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="commission-paid" className="text-sm font-medium text-gray-700">Paid</label>
+          </div>
+          {commissionForm.paid && (
+            <Input
+              label="Paid Date"
+              type="date"
+              value={commissionForm.paid_date}
+              onChange={(e) => setCommissionForm((f) => ({ ...f, paid_date: e.target.value }))}
+            />
+          )}
+          <div className="flex justify-end gap-3 pt-2 border-t border-gray-200 mt-2">
+            <Button variant="secondary" size="sm" onClick={() => setCommissionPanelOpen(false)} disabled={savingCommission}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={handleSaveCommission} loading={savingCommission}>
+              {editingCommission ? 'Save Changes' : 'Add Commission'}
+            </Button>
+          </div>
+        </div>
+      </SidePanel>
+
       {/* Modals */}
       <Modal open={!!deleteItem} title="Remove Item" danger
         message={`Remove "${deleteItem?.product?.name ?? 'this item'}" from the delivery?`}
@@ -745,6 +953,9 @@ export function DeliveryDetail() {
       <Modal open={!!deleteCost} title="Delete Cost" danger
         message={`Delete this ${COST_TYPES.find((c) => c.value === deleteCost?.cost_type)?.label ?? 'cost'} entry?`}
         confirmLabel="Delete" onConfirm={handleDeleteCost} onCancel={() => setDeleteCost(null)} loading={deletingCost} />
+      <Modal open={!!deleteCommission} title="Delete Commission" danger
+        message="Delete this commission entry? It will be removed from P&L calculations."
+        confirmLabel="Delete" onConfirm={handleDeleteCommission} onCancel={() => setDeleteCommission(null)} loading={deletingCommission} />
     </div>
   )
 }

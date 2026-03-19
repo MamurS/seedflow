@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DollarSign, TrendingUp, TrendingDown, AlertCircle, Package, Plus, ArrowRight } from 'lucide-react'
+import { DollarSign, TrendingUp, TrendingDown, AlertCircle, Package, Plus, ArrowRight, Receipt } from 'lucide-react'
 import { useDashboard } from '../hooks/useDashboard'
+import { useCashRegister } from '../hooks/useCashRegister'
 import { Breadcrumb } from '../components/ui/Breadcrumb'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { formatUSD, formatDate } from '../lib/formatters'
+import { formatUSD, formatDate, formatNumber, formatUZS } from '../lib/formatters'
 import { DELIVERY_STATUS_COLORS } from '../lib/constants'
 
 function PipelineBox({ status, label, count }: { status: string; label: string; count: number }) {
@@ -26,6 +27,7 @@ export function Dashboard() {
 
   const navigate = useNavigate()
   const { loading, kpis, pipeline, overduePayments, inventorySummary } = useDashboard()
+  const { totals: cashTotals, loading: cashLoading } = useCashRegister()
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,6 +46,9 @@ export function Dashboard() {
           </Button>
           <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/inkasso')}>
             Record Inkasso
+          </Button>
+          <Button variant="secondary" size="sm" icon={<Receipt size={14} />} onClick={() => navigate('/cash-register')}>
+            Cash Register
           </Button>
         </div>
       </div>
@@ -106,6 +111,39 @@ export function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Cash Register Status */}
+      {(cashLoading || cashTotals.totalRemaining > 0) && (
+        <div className={[
+          'rounded-lg border p-5 flex items-center justify-between gap-4',
+          cashTotals.totalRemaining > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-gray-200',
+        ].join(' ')}>
+          <div className="flex items-center gap-3">
+            <Receipt size={20} className={cashTotals.totalRemaining > 0 ? 'text-yellow-600' : 'text-gray-400'} />
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">Cash Register Status</h2>
+              {cashLoading ? (
+                <p className="text-sm text-gray-400">Loading…</p>
+              ) : cashTotals.totalRemaining > 0 ? (
+                <p className="text-sm text-yellow-700">
+                  <span className="font-bold">{formatNumber(cashTotals.totalRemaining, 0)} packs</span> not yet registered through cash register
+                  {cashTotals.totalRemainingUZS > 0 && (
+                    <span className="ml-2 text-yellow-600">({formatUZS(cashTotals.totalRemainingUZS)})</span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-sm text-green-700 font-medium">All inventory registered through cash register ✓</p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/cash-register')}
+            className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 whitespace-nowrap"
+          >
+            Manage <ArrowRight size={12} />
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {/* Overdue payments */}

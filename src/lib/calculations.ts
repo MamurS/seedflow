@@ -1,4 +1,4 @@
-import type { Delivery, DeliveryItem, DeliveryCost, Opex, Sale } from '../types/database'
+import type { Delivery, DeliveryItem, DeliveryCost, Opex, Sale, SupplierCommission } from '../types/database'
 
 // ─── Landed Cost ──────────────────────────────────────────────────────────────
 
@@ -94,6 +94,7 @@ export interface DeliveryPnL {
   cogs: number
   gross_profit: number
   allocated_opex: number
+  commissions: number
   net_profit: number
   gross_margin_pct: number
   net_margin_pct: number
@@ -102,7 +103,8 @@ export interface DeliveryPnL {
 export function calcDeliveryPnL(
   items: DeliveryItem[],
   sales: Sale[],
-  allocatedOpexUsd: number
+  allocatedOpexUsd: number,
+  commissions: SupplierCommission[] = []
 ): DeliveryPnL {
   // Map item id to landed cost
   const landedCostMap = new Map<string, number>(
@@ -118,29 +120,12 @@ export function calcDeliveryPnL(
     cogs += landedCost * sale.quantity
   }
 
+  const commissionsTotal = commissions.reduce((s, c) => s + c.amount_usd, 0)
   const gross_profit = revenue - cogs
-  const net_profit = gross_profit - allocatedOpexUsd
+  const net_profit = gross_profit - allocatedOpexUsd - commissionsTotal
   const gross_margin_pct = revenue > 0 ? (gross_profit / revenue) * 100 : 0
   const net_margin_pct = revenue > 0 ? (net_profit / revenue) * 100 : 0
 
-  return { revenue, cogs, gross_profit, allocated_opex: allocatedOpexUsd, net_profit, gross_margin_pct, net_margin_pct }
+  return { revenue, cogs, gross_profit, allocated_opex: allocatedOpexUsd, commissions: commissionsTotal, net_profit, gross_margin_pct, net_margin_pct }
 }
 
-// ─── Inkasso ──────────────────────────────────────────────────────────────────
-
-export interface InkassoCalc {
-  registered_amount_uzs: number
-  deposited_to_bank_uzs: number
-  difference_uzs: number
-}
-
-export function calcInkasso(
-  cashReceivedUzs: number,
-  quantity: number,
-  officialPricePerPackUzs: number
-): InkassoCalc {
-  const registered_amount_uzs = quantity * officialPricePerPackUzs
-  const deposited_to_bank_uzs = registered_amount_uzs
-  const difference_uzs = cashReceivedUzs - registered_amount_uzs
-  return { registered_amount_uzs, deposited_to_bank_uzs, difference_uzs }
-}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Delivery, DeliveryItem, Sale, OpexAllocation } from '../types/database'
+import type { Delivery, DeliveryItem, Sale, OpexAllocation, SupplierCommission } from '../types/database'
 import { toast } from '../components/ui/Toast'
 
 function normalizeJoin<T>(val: unknown): T | null {
@@ -14,11 +14,12 @@ export function usePnL() {
   const [allItems, setAllItems] = useState<DeliveryItem[]>([])
   const [allSales, setAllSales] = useState<Sale[]>([])
   const [allAllocations, setAllAllocations] = useState<OpexAllocation[]>([])
+  const [allCommissions, setAllCommissions] = useState<SupplierCommission[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    const [dr, ir, sr, ar] = await Promise.all([
+    const [dr, ir, sr, ar, cr] = await Promise.all([
       supabase
         .from('deliveries')
         .select('id, invoice_number, status, total_cip_usd, cycle_start_month, cycle_end_month, created_at, supplier:suppliers(id, name)')
@@ -33,6 +34,9 @@ export function usePnL() {
       supabase
         .from('opex_allocation')
         .select('id, delivery_id, month, allocated_amount_usd'),
+      supabase
+        .from('supplier_commissions')
+        .select('id, delivery_id, commission_type, amount_usd, description, paid, paid_date, created_at'),
     ])
 
     if (dr.error) toast('error', 'Failed to load deliveries', dr.error.message)
@@ -47,10 +51,11 @@ export function usePnL() {
     )
     setAllSales((sr.data ?? []) as unknown as Sale[])
     setAllAllocations((ar.data ?? []) as unknown as OpexAllocation[])
+    setAllCommissions((cr.data ?? []) as unknown as SupplierCommission[])
     setLoading(false)
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
 
-  return { deliveries, allItems, allSales, allAllocations, loading, refetch: fetch }
+  return { deliveries, allItems, allSales, allAllocations, allCommissions, loading, refetch: fetch }
 }
