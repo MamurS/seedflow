@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from 'react'
+import { useState, useMemo, useEffect, type ReactNode } from 'react'
 import { ChevronUp, ChevronDown, ChevronsUpDown, Search } from 'lucide-react'
 
 export interface Column<T> {
@@ -25,6 +25,8 @@ interface TableProps<T> {
 
 type SortDir = 'asc' | 'desc' | null
 
+const SKELETON_WIDTHS = ['w-3/4', 'w-1/2', 'w-2/3', 'w-4/5', 'w-3/5']
+
 export function Table<T extends object>({
   columns,
   data,
@@ -37,10 +39,17 @@ export function Table<T extends object>({
   emptyMessage = 'No data found.',
   pageSize = 25,
 }: TableProps<T>) {
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>(null)
   const [page, setPage] = useState(1)
+
+  // Debounce search input 300ms
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return data
@@ -95,8 +104,8 @@ export function Table<T extends object>({
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             type="text"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder={searchPlaceholder}
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
@@ -127,14 +136,17 @@ export function Table<T extends object>({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-12 text-center text-gray-400">
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-                    Loading...
-                  </div>
-                </td>
-              </tr>
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i}>
+                  {columns.map((col) => (
+                    <td key={col.key} className="px-4 py-3">
+                      <div
+                        className={`h-4 bg-gray-200 rounded animate-pulse ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]}`}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : paginated.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-12 text-center text-gray-400">

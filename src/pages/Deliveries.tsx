@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useDeliveries } from '../hooks/useDeliveries'
+import { supabase } from '../lib/supabase'
+import { toast } from '../components/ui/Toast'
 import { useSuppliers } from '../hooks/useSuppliers'
 import type { Delivery, DeliveryInsert } from '../types/database'
 import { DELIVERY_STATUSES } from '../lib/constants'
@@ -39,6 +41,11 @@ const STATUS_BADGE_MAP: Record<string, 'neutral' | 'info' | 'indigo' | 'warning'
 export function Deliveries() {
   const navigate = useNavigate()
   const { deliveries, loading, create, update, remove } = useDeliveries()
+
+  useEffect(() => {
+    document.title = 'Deliveries | SeedFlow'
+    return () => { document.title = 'SeedFlow' }
+  }, [])
   const { suppliers } = useSuppliers()
 
   const [panelOpen, setPanelOpen] = useState(false)
@@ -92,6 +99,21 @@ export function Deliveries() {
   const handleSave = async () => {
     if (!validate()) return
     setSaving(true)
+
+    // Duplicate invoice# + supplier check (warn but still allow)
+    const trimmedInvoice = form.invoice_number?.trim()
+    if (trimmedInvoice && form.supplier_id) {
+      let query = supabase
+        .from('deliveries')
+        .select('id')
+        .eq('invoice_number', trimmedInvoice)
+        .eq('supplier_id', form.supplier_id)
+      if (editing) query = query.neq('id', editing.id)
+      const { data: dupes } = await query
+      if (dupes && dupes.length > 0) {
+        toast('warning', 'Duplicate invoice', `Invoice "${trimmedInvoice}" already exists for this supplier.`)
+      }
+    }
     const nullify = (v: string | number | null | undefined) =>
       typeof v === 'string' ? v.trim() || null : v ?? null
 
@@ -274,12 +296,14 @@ export function Deliveries() {
               <Input
                 label="Airfreight (USD)"
                 type="number"
+                min="0"
                 value={form.airfreight_usd ?? 300}
                 onChange={(e) => setField('airfreight_usd', Number(e.target.value))}
               />
               <Input
                 label="Exchange Rate"
                 type="number"
+                min="0"
                 value={form.exchange_rate ?? ''}
                 onChange={(e) => setField('exchange_rate', e.target.value ? Number(e.target.value) : undefined)}
                 placeholder="USD/UZS"

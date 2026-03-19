@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { Download } from 'lucide-react'
 import { usePnL } from '../hooks/usePnL'
@@ -61,6 +61,11 @@ function profitColor(v: number) {
 
 export function PnL() {
   const { deliveries, allItems, allSales, allAllocations, loading } = usePnL()
+
+  useEffect(() => {
+    document.title = 'P&L | SeedFlow'
+    return () => { document.title = 'SeedFlow' }
+  }, [])
 
   const [periodType, setPeriodType] = useState<PeriodType>('month')
   const [selectedMonth, setSelectedMonth] = useState(currentYM)

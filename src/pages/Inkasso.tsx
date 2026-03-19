@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useInkasso, calcInkasso } from '../hooks/useInkasso'
 import type { Inkasso as InkassoType, InkassoInsert } from '../types/database'
@@ -38,6 +38,11 @@ const EMPTY_FORM: InkassoForm = {
 
 export function Inkasso() {
   const { inkassos, unpaidSales, loading, create, update, remove } = useInkasso()
+
+  useEffect(() => {
+    document.title = 'Inkasso | SeedFlow'
+    return () => { document.title = 'SeedFlow' }
+  }, [])
 
   const [panelOpen, setPanelOpen] = useState(false)
   const [editing, setEditing] = useState<InkassoType | null>(null)

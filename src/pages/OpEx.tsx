@@ -75,6 +75,11 @@ export function OpEx() {
   } = useOpEx()
   const { deliveries } = useDeliveries()
 
+  useEffect(() => {
+    document.title = 'OpEx | SeedFlow'
+    return () => { document.title = 'SeedFlow' }
+  }, [])
+
   const [startMonth, setStartMonth] = useState(() => addMonths(currentYM(), -5))
   const [recalcLoading, setRecalcLoading] = useState(false)
   const [copyLoading, setCopyLoading] = useState(false)

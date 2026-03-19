@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useSales } from '../hooks/useSales'
 import { useDealers } from '../hooks/useDealers'
@@ -66,6 +66,11 @@ const PAYMENT_STATUS_OPTIONS: { value: PaymentStatus; label: string }[] = [
 export function Sales() {
   const { sales, deliveryItemOptions, loading, create, update, remove } = useSales()
   const { dealers } = useDealers()
+
+  useEffect(() => {
+    document.title = 'Sales | SeedFlow'
+    return () => { document.title = 'SeedFlow' }
+  }, [])
 
   // ── Filter state ────────────────────────────────────────────────────────────
   const [filterDealer, setFilterDealer] = useState('')

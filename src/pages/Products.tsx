@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useProducts } from '../hooks/useProducts'
 import { useSuppliers } from '../hooks/useSuppliers'
@@ -35,6 +35,11 @@ const MAP_CURRENCIES = [
 export function Products() {
   const { products, loading, create, update, remove } = useProducts()
   const { suppliers } = useSuppliers()
+
+  useEffect(() => {
+    document.title = 'Products | SeedFlow'
+    return () => { document.title = 'SeedFlow' }
+  }, [])
 
   const [panelOpen, setPanelOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)

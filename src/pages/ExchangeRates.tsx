@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { useExchangeRates } from '../hooks/useExchangeRates'
 import type { ExchangeRate } from '../types/database'
@@ -13,6 +13,11 @@ import { formatDate, formatNumber } from '../lib/formatters'
 
 export function ExchangeRates() {
   const { rates, loading, create, remove } = useExchangeRates()
+
+  useEffect(() => {
+    document.title = 'Exchange Rates | SeedFlow'
+    return () => { document.title = 'SeedFlow' }
+  }, [])
 
   const [panelOpen, setPanelOpen] = useState(false)
   const [form, setForm] = useState({ date: '', usd_uzs: '' })

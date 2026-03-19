@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react'
+import { useState, useEffect, type ChangeEvent } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useSuppliers } from '../hooks/useSuppliers'
 import type { Supplier, SupplierInsert } from '../types/database'
@@ -23,6 +23,11 @@ const EMPTY_FORM: SupplierInsert = {
 
 export function Suppliers() {
   const { suppliers, loading, create, update, remove } = useSuppliers()
+
+  useEffect(() => {
+    document.title = 'Suppliers | SeedFlow'
+    return () => { document.title = 'SeedFlow' }
+  }, [])
 
   const [panelOpen, setPanelOpen] = useState(false)
   const [editing, setEditing] = useState<Supplier | null>(null)

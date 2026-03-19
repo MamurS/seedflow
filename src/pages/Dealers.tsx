@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react'
+import { useState, useEffect, type ChangeEvent } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useDealers } from '../hooks/useDealers'
 import type { Dealer, DealerInsert } from '../types/database'
@@ -24,6 +24,11 @@ const EMPTY_FORM: DealerInsert = {
 
 export function Dealers() {
   const { dealers, loading, create, update, remove } = useDealers()
+
+  useEffect(() => {
+    document.title = 'Dealers | SeedFlow'
+    return () => { document.title = 'SeedFlow' }
+  }, [])
 
   const [panelOpen, setPanelOpen] = useState(false)
   const [editing, setEditing] = useState<Dealer | null>(null)

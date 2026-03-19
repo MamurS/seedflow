@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import { ProtectedRoute } from './components/layout/ProtectedRoute'
 import { PageLayout } from './components/layout/PageLayout'
@@ -17,6 +17,7 @@ import { OpEx } from './pages/OpEx'
 import { PnL } from './pages/PnL'
 import { Pricing } from './pages/Pricing'
 import { ExchangeRates } from './pages/ExchangeRates'
+import { NotFound } from './pages/NotFound'
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
@@ -50,7 +51,7 @@ export default function App() {
           <Route path="pnl" element={<PnL />} />
           <Route path="pricing" element={<Pricing />} />
           <Route path="exchange-rates" element={<ExchangeRates />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
       <ToastContainer />

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DollarSign, TrendingUp, TrendingDown, AlertCircle, Package, Plus, ArrowRight } from 'lucide-react'
 import { useDashboard } from '../hooks/useDashboard'
@@ -18,6 +19,11 @@ function PipelineBox({ status, label, count }: { status: string; label: string; 
 }
 
 export function Dashboard() {
+  useEffect(() => {
+    document.title = 'Dashboard | SeedFlow'
+    return () => { document.title = 'SeedFlow' }
+  }, [])
+
   const navigate = useNavigate()
   const { loading, kpis, pipeline, overduePayments, inventorySummary } = useDashboard()
 
