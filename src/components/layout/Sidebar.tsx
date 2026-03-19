@@ -11,6 +11,7 @@ import {
   Calculator,
   BarChart3,
   Tag,
+  TrendingUp,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { href: '/opex', label: 'OpEx', icon: <Calculator size={18} /> },
   { href: '/pnl', label: 'P&L', icon: <BarChart3 size={18} /> },
   { href: '/pricing', label: 'Pricing', icon: <Tag size={18} /> },
+  { href: '/exchange-rates', label: 'Exchange Rates', icon: <TrendingUp size={18} /> },
 ]
 
 export function Sidebar() {

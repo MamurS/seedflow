@@ -16,6 +16,7 @@ import { Inkasso } from './pages/Inkasso'
 import { OpEx } from './pages/OpEx'
 import { PnL } from './pages/PnL'
 import { Pricing } from './pages/Pricing'
+import { ExchangeRates } from './pages/ExchangeRates'
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="opex" element={<OpEx />} />
           <Route path="pnl" element={<PnL />} />
           <Route path="pricing" element={<Pricing />} />
+          <Route path="exchange-rates" element={<ExchangeRates />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

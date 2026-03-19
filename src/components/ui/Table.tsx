@@ -25,7 +25,7 @@ interface TableProps<T> {
 
 type SortDir = 'asc' | 'desc' | null
 
-export function Table<T extends Record<string, unknown>>({
+export function Table<T extends object>({
   columns,
   data,
   loading = false,
@@ -46,16 +46,17 @@ export function Table<T extends Record<string, unknown>>({
     if (!search.trim()) return data
     const q = search.toLowerCase()
     return data.filter((row) => {
-      const keys = searchKeys ?? (Object.keys(row) as (keyof T)[])
-      return keys.some((k) => String(row[k] ?? '').toLowerCase().includes(q))
+      const r = row as Record<string, unknown>
+      const keys = searchKeys ?? (Object.keys(r) as (keyof T)[])
+      return keys.some((k) => String(r[k as string] ?? '').toLowerCase().includes(q))
     })
   }, [data, search, searchKeys])
 
   const sorted = useMemo(() => {
     if (!sortKey || !sortDir) return filtered
     return [...filtered].sort((a, b) => {
-      const av = a[sortKey]
-      const bv = b[sortKey]
+      const av = (a as Record<string, unknown>)[sortKey]
+      const bv = (b as Record<string, unknown>)[sortKey]
       if (av == null && bv == null) return 0
       if (av == null) return 1
       if (bv == null) return -1
@@ -79,7 +80,7 @@ export function Table<T extends Record<string, unknown>>({
   }
 
   const getKey = (row: T) =>
-    typeof rowKey === 'function' ? rowKey(row) : String(row[rowKey])
+    typeof rowKey === 'function' ? rowKey(row) : String((row as Record<string, unknown>)[rowKey as string])
 
   const SortIcon = ({ colKey }: { colKey: string }) => {
     if (sortKey !== colKey) return <ChevronsUpDown size={14} className="text-gray-400" />
@@ -152,7 +153,7 @@ export function Table<T extends Record<string, unknown>>({
                 >
                   {columns.map((col) => (
                     <td key={col.key} className={['px-4 py-3 text-gray-900', col.className ?? ''].join(' ')}>
-                      {col.render ? col.render(row) : String(row[col.key] ?? '—')}
+                      {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '—')}
                     </td>
                   ))}
                 </tr>
