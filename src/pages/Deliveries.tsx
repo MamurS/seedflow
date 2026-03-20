@@ -81,8 +81,8 @@ export function Deliveries() {
       status: d.status,
       airfreight_usd: d.airfreight_usd,
       exchange_rate: d.exchange_rate ?? undefined,
-      cycle_start_month: d.cycle_start_month ?? '',
-      cycle_end_month: d.cycle_end_month ?? '',
+      cycle_start_month: d.cycle_start_month ? d.cycle_start_month.slice(0, 7) : '',
+      cycle_end_month: d.cycle_end_month ? d.cycle_end_month.slice(0, 7) : '',
       notes: d.notes ?? '',
     })
     setErrors({})
@@ -130,8 +130,8 @@ export function Deliveries() {
       status: form.status,
       airfreight_usd: Number(form.airfreight_usd) || 300,
       exchange_rate: form.exchange_rate ? Number(form.exchange_rate) : null,
-      cycle_start_month: nullify(form.cycle_start_month) as string | null,
-      cycle_end_month: nullify(form.cycle_end_month) as string | null,
+      cycle_start_month: form.cycle_start_month ? form.cycle_start_month + '-01' : null,
+      cycle_end_month: form.cycle_end_month ? form.cycle_end_month + '-01' : null,
       notes: nullify(form.notes) as string | null,
     }
 

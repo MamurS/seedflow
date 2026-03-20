@@ -179,8 +179,8 @@ export function useOpEx() {
     for (const month of months) {
       const monthEntries = entries.filter((e) => e.month === month)
       const active = deliveries.filter((d) => {
-        const s = d.cycle_start_month
-        const e = d.cycle_end_month
+        const s = d.cycle_start_month?.slice(0, 7) ?? null
+        const e = d.cycle_end_month?.slice(0, 7) ?? null
         if (s && e) return s <= month && month <= e
         if (s) return s <= month
         return (d.total_cip_usd ?? 0) > 0
