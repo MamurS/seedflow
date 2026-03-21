@@ -41,7 +41,15 @@ export function useSuppliers() {
 
   const remove = async (id: string): Promise<boolean> => {
     const { error } = await supabase.from('suppliers').delete().eq('id', id)
-    if (error) { toast('error', 'Failed to delete supplier', error.message); return false }
+    if (error) {
+      console.log('Delete supplier error:', error.message)
+      if (error.message.includes('violates foreign key constraint')) {
+        toast('error', 'Cannot delete this supplier', 'They have products or deliveries linked. Remove those first.')
+      } else {
+        toast('error', 'Failed to delete supplier', error.message)
+      }
+      return false
+    }
     toast('success', 'Supplier deleted')
     await fetch()
     return true

@@ -21,10 +21,9 @@ export const useExchangeRateStore = create<ExchangeRateState>((set) => ({
       .select('usd_uzs, date')
       .order('date', { ascending: false })
       .limit(1)
-      .single()
 
-    if (!error && data) {
-      set({ currentRate: data.usd_uzs })
+    if (!error && data && data.length > 0) {
+      set({ currentRate: data[0].usd_uzs })
     }
   },
 

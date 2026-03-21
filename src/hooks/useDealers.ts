@@ -41,7 +41,15 @@ export function useDealers() {
 
   const remove = async (id: string): Promise<boolean> => {
     const { error } = await supabase.from('dealers').delete().eq('id', id)
-    if (error) { toast('error', 'Failed to delete dealer', error.message); return false }
+    if (error) {
+      console.log('Delete dealer error:', error.message)
+      if (error.message.includes('violates foreign key constraint')) {
+        toast('error', 'Cannot delete this dealer', 'They have sales records linked. Remove those first.')
+      } else {
+        toast('error', 'Failed to delete dealer', error.message)
+      }
+      return false
+    }
     toast('success', 'Dealer deleted')
     await fetch()
     return true

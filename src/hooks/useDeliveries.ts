@@ -55,7 +55,15 @@ export function useDeliveries() {
 
   const remove = async (id: string): Promise<boolean> => {
     const { error } = await supabase.from('deliveries').delete().eq('id', id)
-    if (error) { toast('error', 'Failed to delete delivery', error.message); return false }
+    if (error) {
+      console.log('Delete delivery error:', error.message)
+      if (error.message.includes('violates foreign key constraint')) {
+        toast('error', 'Cannot delete this delivery', 'It has sales or cash register entries linked. Remove those first.')
+      } else {
+        toast('error', 'Failed to delete delivery', error.message)
+      }
+      return false
+    }
     toast('success', 'Delivery deleted')
     await fetch()
     return true

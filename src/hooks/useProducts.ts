@@ -46,7 +46,15 @@ export function useProducts() {
 
   const remove = async (id: string): Promise<boolean> => {
     const { error } = await supabase.from('products').delete().eq('id', id)
-    if (error) { toast('error', 'Failed to delete product', error.message); return false }
+    if (error) {
+      console.log('Delete product error:', error.message)
+      if (error.message.includes('violates foreign key constraint')) {
+        toast('error', 'Cannot delete this product', "It's used in one or more deliveries. Remove it from deliveries first.")
+      } else {
+        toast('error', 'Failed to delete product', error.message)
+      }
+      return false
+    }
     toast('success', 'Product deleted')
     await fetch()
     return true
