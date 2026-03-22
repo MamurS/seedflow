@@ -28,16 +28,18 @@ export interface ProductWithStats extends Product {
   importCount: number
   latestCip: number | null
   latestImport: DeliveryItemImport | null
+  latestRetailPrice: number | null
 }
 
 export function useProducts() {
   const [products, setProducts] = useState<ProductWithStats[]>([])
   const [importsByProduct, setImportsByProduct] = useState<Map<string, DeliveryItemImport[]>>(new Map())
+  const [soldByDeliveryItem, setSoldByDeliveryItem] = useState<Map<string, number>>(new Map())
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    const [productsRes, itemsRes] = await Promise.all([
+    const [productsRes, itemsRes, salesRes] = await Promise.all([
       supabase
         .from('products')
         .select('id, supplier_id, name, crop_type, variety, unit, seeds_per_pack, map_price, map_currency, notes, is_active, created_at, updated_at, supplier:suppliers(id, name, country)')
@@ -50,6 +52,10 @@ export function useProducts() {
           delivery:deliveries(id, invoice_number, invoice_date, delivery_date)
         `)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('sales')
+        .select('id, delivery_item_id, sale_date, quantity, real_price_per_pack')
+        .order('sale_date', { ascending: false }),
     ])
 
     if (productsRes.error) {
@@ -72,6 +78,23 @@ export function useProducts() {
       byProduct.set(item.product_id, list)
     }
 
+    // Build delivery_item_id → product_id cross-reference
+    const itemToProduct = new Map<string, string>()
+    for (const item of allItems) {
+      itemToProduct.set(item.id, item.product_id)
+    }
+
+    // Build sold count per delivery_item and latest retail per product (sales sorted desc by sale_date)
+    const soldMap = new Map<string, number>()
+    const latestRetailByProduct = new Map<string, number>()
+    for (const sale of (salesRes.data ?? []) as { delivery_item_id: string; quantity: number; real_price_per_pack: number }[]) {
+      soldMap.set(sale.delivery_item_id, (soldMap.get(sale.delivery_item_id) ?? 0) + sale.quantity)
+      const productId = itemToProduct.get(sale.delivery_item_id)
+      if (productId && !latestRetailByProduct.has(productId)) {
+        latestRetailByProduct.set(productId, sale.real_price_per_pack)
+      }
+    }
+
     const normalized: ProductWithStats[] = (productsRes.data ?? []).map((row) => {
       const product = {
         ...row,
@@ -83,11 +106,13 @@ export function useProducts() {
         importCount: imports.length,
         latestCip: imports[0]?.cip_price_usd ?? null,
         latestImport: imports[0] ?? null,
+        latestRetailPrice: latestRetailByProduct.get(product.id) ?? null,
       }
     })
 
     setProducts(normalized)
     setImportsByProduct(byProduct)
+    setSoldByDeliveryItem(soldMap)
     setLoading(false)
   }, [])
 
@@ -133,5 +158,5 @@ export function useProducts() {
     return true
   }
 
-  return { products, importsByProduct, loading, refetch: fetch, create, update, updateImportNotes, remove }
+  return { products, importsByProduct, soldByDeliveryItem, loading, refetch: fetch, create, update, updateImportNotes, remove }
 }

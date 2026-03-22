@@ -13,6 +13,7 @@ import {
   Tag,
   TrendingUp,
   Receipt,
+  Wand2,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 
@@ -30,6 +31,7 @@ const navItems: NavItem[] = [
   { href: '/deliveries', label: 'Deliveries', icon: <Truck size={18} /> },
   { href: '/sales', label: 'Sales', icon: <ShoppingCart size={18} /> },
   { href: '/cash-register', label: 'Cash Register', icon: <Receipt size={18} /> },
+  { href: '/cash-register-wizard', label: 'CR Wizard', icon: <Wand2 size={18} /> },
   { href: '/inkasso', label: 'Inkasso', icon: <Banknote size={18} /> },
   { href: '/opex', label: 'OpEx', icon: <Calculator size={18} /> },
   { href: '/pnl', label: 'P&L', icon: <BarChart3 size={18} /> },

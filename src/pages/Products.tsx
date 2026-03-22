@@ -32,7 +32,7 @@ type PanelMode = 'create' | 'detail' | null
 type DetailTab = 'info' | 'history'
 
 export function Products() {
-  const { products, importsByProduct, loading, create, update, updateImportNotes, remove } = useProducts()
+  const { products, importsByProduct, soldByDeliveryItem, loading, create, update, updateImportNotes, remove } = useProducts()
   const { suppliers } = useSuppliers()
 
   useEffect(() => {
@@ -181,6 +181,14 @@ export function Products() {
       sortable: true,
       render: (r) => r.latestCip != null
         ? <span className="font-medium text-gray-900">{formatUSD(r.latestCip)}</span>
+        : <span className="text-gray-400">—</span>,
+    },
+    {
+      key: 'latestRetailPrice',
+      label: 'Latest Retail',
+      sortable: true,
+      render: (r) => r.latestRetailPrice != null
+        ? <span className="font-medium text-emerald-700">{formatUSD(r.latestRetailPrice)}</span>
         : <span className="text-gray-400">—</span>,
     },
     {
@@ -336,7 +344,7 @@ export function Products() {
                     <table className="min-w-full text-sm">
                       <thead>
                         <tr className="bg-gray-50 border-y border-gray-200">
-                          {['Delivery', 'Date', 'CIP/pack', 'Rec. Price', 'Official UZS', 'Margin', 'Qty', 'Notes', ''].map((h) => (
+                          {['Delivery', 'Date', 'CIP/pack', 'Rec. Price', 'Official UZS', 'Margin', 'Qty', 'Sold', 'Notes', ''].map((h) => (
                             <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                               {h}
                             </th>
@@ -373,6 +381,14 @@ export function Products() {
                               </td>
                               <td className="px-3 py-2 text-gray-600">
                                 {item.quantity.toLocaleString()}
+                              </td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {(() => {
+                                  const sold = soldByDeliveryItem.get(item.id) ?? 0
+                                  return sold > 0
+                                    ? <span className="font-medium text-emerald-700">{sold.toLocaleString()}</span>
+                                    : <span className="text-gray-300">—</span>
+                                })()}
                               </td>
                               <td className="px-3 py-2 min-w-[120px]">
                                 {isEditingThis ? (

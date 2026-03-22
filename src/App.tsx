@@ -14,6 +14,7 @@ import { DeliveryDetail } from './pages/DeliveryDetail'
 import { Sales } from './pages/Sales'
 import { Inkasso } from './pages/Inkasso'
 import { CashRegister } from './pages/CashRegister'
+import { CashRegisterWizard } from './pages/CashRegisterWizard'
 import { OpEx } from './pages/OpEx'
 import { PnL } from './pages/PnL'
 import { Pricing } from './pages/Pricing'
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="deliveries/:id" element={<DeliveryDetail />} />
           <Route path="sales" element={<Sales />} />
           <Route path="cash-register" element={<CashRegister />} />
+          <Route path="cash-register-wizard" element={<CashRegisterWizard />} />
           <Route path="inkasso" element={<Inkasso />} />
           <Route path="opex" element={<OpEx />} />
           <Route path="pnl" element={<PnL />} />
