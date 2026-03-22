@@ -3,26 +3,91 @@ import { supabase } from '../lib/supabase'
 import type { Product, ProductInsert, ProductUpdate } from '../types/database'
 import { toast } from '../components/ui/Toast'
 
+export interface DeliveryItemImport {
+  id: string
+  product_id: string
+  delivery_id: string
+  cip_price_usd: number
+  margin_pct: number
+  official_price_uzs: number | null
+  test_packs_qty: number
+  sellable_qty: number | null
+  quantity: number
+  recommended_price_usd: number | null
+  notes: string | null
+  created_at: string
+  delivery?: {
+    id: string
+    invoice_number: string | null
+    invoice_date: string | null
+    delivery_date: string | null
+  }
+}
+
+export interface ProductWithStats extends Product {
+  importCount: number
+  latestCip: number | null
+  latestImport: DeliveryItemImport | null
+}
+
 export function useProducts() {
-  const [products, setProducts] = useState<Product[]>([])
+  const [products, setProducts] = useState<ProductWithStats[]>([])
+  const [importsByProduct, setImportsByProduct] = useState<Map<string, DeliveryItemImport[]>>(new Map())
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, supplier_id, name, crop_type, variety, unit, seeds_per_pack, map_price, map_currency, notes, is_active, created_at, updated_at, supplier:suppliers(id, name, country)')
-      .order('name')
-    if (error) {
-      toast('error', 'Failed to load products', error.message)
-    } else {
-      // Supabase returns joined supplier as array; normalize to single object
-      const normalized = (data ?? []).map((row) => ({
-        ...row,
-        supplier: Array.isArray(row.supplier) ? row.supplier[0] ?? null : row.supplier,
-      }))
-      setProducts(normalized as unknown as Product[])
+    const [productsRes, itemsRes] = await Promise.all([
+      supabase
+        .from('products')
+        .select('id, supplier_id, name, crop_type, variety, unit, seeds_per_pack, map_price, map_currency, notes, is_active, created_at, updated_at, supplier:suppliers(id, name, country)')
+        .order('name'),
+      supabase
+        .from('delivery_items')
+        .select(`
+          id, product_id, delivery_id, cip_price_usd, margin_pct, official_price_uzs,
+          test_packs_qty, sellable_qty, quantity, recommended_price_usd, notes, created_at,
+          delivery:deliveries(id, invoice_number, invoice_date, delivery_date)
+        `)
+        .order('created_at', { ascending: false }),
+    ])
+
+    if (productsRes.error) {
+      toast('error', 'Failed to load products', productsRes.error.message)
+      setLoading(false)
+      return
     }
+
+    // Normalize delivery items (delivery join may be array)
+    const allItems: DeliveryItemImport[] = (itemsRes.data ?? []).map((row) => ({
+      ...row,
+      delivery: Array.isArray(row.delivery) ? (row.delivery[0] ?? undefined) : (row.delivery ?? undefined),
+    })) as DeliveryItemImport[]
+
+    // Group by product_id (already desc by created_at → index 0 = latest)
+    const byProduct = new Map<string, DeliveryItemImport[]>()
+    for (const item of allItems) {
+      const list = byProduct.get(item.product_id) ?? []
+      list.push(item)
+      byProduct.set(item.product_id, list)
+    }
+
+    const normalized: ProductWithStats[] = (productsRes.data ?? []).map((row) => {
+      const product = {
+        ...row,
+        supplier: Array.isArray(row.supplier) ? (row.supplier[0] ?? null) : row.supplier,
+      } as unknown as Product
+      const imports = byProduct.get(product.id) ?? []
+      return {
+        ...product,
+        importCount: imports.length,
+        latestCip: imports[0]?.cip_price_usd ?? null,
+        latestImport: imports[0] ?? null,
+      }
+    })
+
+    setProducts(normalized)
+    setImportsByProduct(byProduct)
     setLoading(false)
   }, [])
 
@@ -44,6 +109,14 @@ export function useProducts() {
     return true
   }
 
+  const updateImportNotes = async (deliveryItemId: string, notes: string | null): Promise<boolean> => {
+    const { error } = await supabase.from('delivery_items').update({ notes }).eq('id', deliveryItemId)
+    if (error) { toast('error', 'Failed to update import notes', error.message); return false }
+    toast('success', 'Notes saved')
+    await fetch()
+    return true
+  }
+
   const remove = async (id: string): Promise<boolean> => {
     const { error } = await supabase.from('products').delete().eq('id', id)
     if (error) {
@@ -60,5 +133,5 @@ export function useProducts() {
     return true
   }
 
-  return { products, loading, refetch: fetch, create, update, remove }
+  return { products, importsByProduct, loading, refetch: fetch, create, update, updateImportNotes, remove }
 }

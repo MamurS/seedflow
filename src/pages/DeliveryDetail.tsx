@@ -60,7 +60,7 @@ export function DeliveryDetail() {
   const { delivery, loading: deliveryLoading, refetch: refetchDelivery } = useDelivery(id)
   const { items, loading: itemsLoading, refetch: refetchItems, create: createItem, update: updateItem, remove: removeItem } = useDeliveryItems(id)
   const { costs, loading: costsLoading, create: createCost, update: updateCost, remove: removeCost } = useDeliveryCosts(id)
-  const { products } = useProducts()
+  const { products, importsByProduct } = useProducts()
   const { commissions, loading: commissionsLoading, create: createCommission, update: updateCommission, remove: removeCommission, totalUsd: totalCommissionsUsd } = useSupplierCommissions(id)
 
   // Item panel state
@@ -92,6 +92,9 @@ export function DeliveryDetail() {
   const [deleteCommission, setDeleteCommission] = useState<SupplierCommission | null>(null)
   const [deletingCommission, setDeletingCommission] = useState(false)
 
+  // Pre-fill hint for Add Item
+  const [prefillHint, setPrefillHint] = useState<string | null>(null)
+
   // Landed cost recalculate state
   const [recalculating, setRecalculating] = useState(false)
 
@@ -106,6 +109,7 @@ export function DeliveryDetail() {
     setEditingItem(null)
     setItemForm(EMPTY_ITEM)
     setItemErrors({})
+    setPrefillHint(null)
     setItemPanelOpen(true)
   }
 
@@ -769,12 +773,43 @@ export function DeliveryDetail() {
           <Select
             label="Product"
             value={itemForm.product_id}
-            onChange={(e) => setItemForm((f) => ({ ...f, product_id: e.target.value }))}
+            onChange={(e) => {
+              const productId = e.target.value
+              if (!editingItem) {
+                const latest = importsByProduct.get(productId)?.[0]
+                if (latest) {
+                  setItemForm((f) => ({
+                    ...f,
+                    product_id: productId,
+                    cip_price_usd: latest.cip_price_usd,
+                    margin_pct: latest.margin_pct,
+                    official_price_uzs: latest.official_price_uzs,
+                    test_packs_qty: latest.test_packs_qty,
+                  }))
+                  const inv = latest.delivery?.invoice_number
+                  const date = latest.delivery?.invoice_date ?? latest.delivery?.delivery_date
+                  const dateLabel = date
+                    ? new Date(date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                    : null
+                  setPrefillHint(inv ? `Pre-filled from ${inv}${dateLabel ? ` (${dateLabel})` : ''}` : null)
+                } else {
+                  setItemForm((f) => ({ ...f, product_id: productId }))
+                  setPrefillHint(null)
+                }
+              } else {
+                setItemForm((f) => ({ ...f, product_id: productId }))
+              }
+            }}
             options={productOptions}
             placeholder="Select product..."
             error={itemErrors.product_id}
             required
           />
+          {prefillHint && !editingItem && (
+            <p className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1 -mt-2">
+              {prefillHint} — override any values below
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Quantity (packs)"
