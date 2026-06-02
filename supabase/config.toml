@@ -1,0 +1,17 @@
+# Supabase local development configuration.
+# Set `project_id` to your Supabase project ref (Dashboard → Settings → General).
+project_id = "seedflow"
+
+[db]
+# Port for the local Postgres started by `supabase start`.
+port = 54322
+major_version = 16
+
+[api]
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public"]
+max_rows = 1000
+
+[studio]
+port = 54323
