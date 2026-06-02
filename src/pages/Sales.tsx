@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Plus, Pencil, Trash2, CheckSquare } from 'lucide-react'
 import { useSales } from '../hooks/useSales'
 import { useDealers } from '../hooks/useDealers'
 import type { Sale, SaleInsert, SaleUpdate, PaymentTerms, PaymentStatus } from '../types/database'
@@ -86,6 +86,27 @@ export function Sales() {
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkUpdating, setBulkUpdating] = useState(false)
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const toggleSelectAll = (currentFiltered: Sale[]) =>
+    setSelectedIds((prev) =>
+      prev.size === currentFiltered.length ? new Set() : new Set(currentFiltered.map((s) => s.id)),
+    )
+
+  const bulkMarkPaid = useCallback(async () => {
+    setBulkUpdating(true)
+    const today = new Date().toISOString().split('T')[0]
+    const ids = Array.from(selectedIds)
+    await Promise.all(ids.map((id) => update(id, { payment_status: 'paid', payment_received_date: today } as SaleUpdate)))
+    setSelectedIds(new Set())
+    setBulkUpdating(false)
+  }, [selectedIds, update])
 
   // ── Derived data ────────────────────────────────────────────────────────────
   const dealerOptions = dealers.map((d) => ({ value: d.id, label: d.name }))
@@ -211,6 +232,21 @@ export function Sales() {
 
   // ── Table columns ───────────────────────────────────────────────────────────
   const columns: Column<Sale>[] = [
+    {
+      key: '_select',
+      label: '',
+      headerClassName: 'w-10',
+      render: (r) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selectedIds.has(r.id)}
+            onChange={() => toggleSelect(r.id)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+        </div>
+      ),
+    },
     {
       key: 'sale_date',
       label: 'Sale Date',
@@ -377,6 +413,36 @@ export function Sales() {
           </Button>
         )}
       </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5">
+          <input
+            type="checkbox"
+            checked={selectedIds.size === filteredSales.length}
+            onChange={() => toggleSelectAll(filteredSales)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm font-medium text-blue-800">{selectedIds.size} selected</span>
+          <div className="ml-2 flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<CheckSquare size={14} />}
+              onClick={bulkMarkPaid}
+              loading={bulkUpdating}
+            >
+              Mark as Paid
+            </Button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <Table

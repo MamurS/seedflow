@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useInkasso } from '../hooks/useInkasso'
+import { supabase } from '../lib/supabase'
 import type { Inkasso as InkassoType, InkassoInsert, InkassoUpdate } from '../types/database'
 import { Breadcrumb } from '../components/ui/Breadcrumb'
 import { Button } from '../components/ui/Button'
@@ -54,6 +55,23 @@ export function Inkasso() {
 
   const monthPrefix = currentMonthPrefix()
   const lastPrefix = lastMonthPrefix()
+
+  // Reconciliation: total paid sales in UZS vs deposited inkasso
+  const [paidSalesUzs, setPaidSalesUzs] = useState<number | null>(null)
+
+  const fetchReconciliation = useCallback(async () => {
+    const { data } = await supabase
+      .from('sales')
+      .select('quantity, official_price_per_pack_uzs, total_official_uzs')
+      .eq('payment_status', 'paid')
+    if (data) {
+      const total = (data as { quantity: number; official_price_per_pack_uzs: number | null; total_official_uzs: number | null }[])
+        .reduce((s, r) => s + (r.total_official_uzs ?? (r.official_price_per_pack_uzs ?? 0) * r.quantity), 0)
+      setPaidSalesUzs(total)
+    }
+  }, [])
+
+  useEffect(() => { fetchReconciliation() }, [fetchReconciliation])
 
   const summaryCards = useMemo(() => {
     const thisYear = String(new Date().getFullYear())
@@ -206,6 +224,35 @@ export function Inkasso() {
           </div>
         ))}
       </div>
+
+      {/* Reconciliation card */}
+      {paidSalesUzs !== null && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Cash Reconciliation (All Time)</p>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-gray-500">Paid Sales (official UZS)</p>
+              <p className="text-base font-bold text-gray-900 mt-0.5">{formatUZS(paidSalesUzs)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Deposited (Inkasso)</p>
+              <p className="text-base font-bold text-gray-900 mt-0.5">{formatUZS(inkassos.reduce((s, i) => s + i.total_amount_uzs, 0))}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Gap (not yet deposited)</p>
+              {(() => {
+                const gap = paidSalesUzs - inkassos.reduce((s, i) => s + i.total_amount_uzs, 0)
+                return (
+                  <p className={`text-base font-bold mt-0.5 ${gap > 0 ? 'text-yellow-600' : 'text-emerald-600'}`}>
+                    {formatUZS(Math.abs(gap))}
+                    {gap > 0 ? ' undeposited' : gap < 0 ? ' over-deposited' : ' balanced'}
+                  </p>
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <Table

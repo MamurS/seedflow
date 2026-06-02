@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, RefreshCw } from 'lucide-react'
 import { useExchangeRates } from '../hooks/useExchangeRates'
 import type { ExchangeRate } from '../types/database'
 import { Breadcrumb } from '../components/ui/Breadcrumb'
@@ -25,6 +25,26 @@ export function ExchangeRates() {
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ExchangeRate | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [fetchingCbu, setFetchingCbu] = useState(false)
+
+  const handleFetchCbu = async () => {
+    setFetchingCbu(true)
+    try {
+      const res = await fetch('https://cbu.uz/oz/arkhiv-kursov-valyut/json/')
+      if (!res.ok) throw new Error('CBU API error')
+      const data: { Ccy: string; Rate: string; Date: string }[] = await res.json()
+      const usdEntry = data.find((d) => d.Ccy === 'USD')
+      if (!usdEntry) throw new Error('USD rate not found')
+      const today = new Date().toISOString().split('T')[0]
+      setForm({ date: today, usd_uzs: usdEntry.Rate })
+      setPanelOpen(true)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      // toast is already available via global import in other files; use alert as fallback
+      alert(`Failed to fetch CBU rate: ${msg}`)
+    }
+    setFetchingCbu(false)
+  }
 
   const validate = () => {
     const e: typeof errors = {}
@@ -94,9 +114,20 @@ export function ExchangeRates() {
             </p>
           )}
         </div>
-        <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => setPanelOpen(true)}>
-          Add Rate
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RefreshCw size={14} className={fetchingCbu ? 'animate-spin' : ''} />}
+            onClick={handleFetchCbu}
+            loading={fetchingCbu}
+          >
+            Fetch CBU Rate
+          </Button>
+          <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => setPanelOpen(true)}>
+            Add Rate
+          </Button>
+        </div>
       </div>
 
       <Table

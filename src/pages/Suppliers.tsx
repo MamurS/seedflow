@@ -1,5 +1,6 @@
-import { useState, useEffect, type ChangeEvent } from 'react'
+import { useState, useEffect, useCallback, type ChangeEvent } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import { useSuppliers } from '../hooks/useSuppliers'
 import type { Supplier, SupplierInsert } from '../types/database'
 import { Breadcrumb } from '../components/ui/Breadcrumb'
@@ -38,6 +39,27 @@ export function Suppliers() {
   const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Supplier KPIs (fetched when editing panel opens)
+  const [kpis, setKpis] = useState<{ deliveries: number; totalCipUsd: number; lastDelivery: string | null } | null>(null)
+
+  const fetchKpis = useCallback(async (supplierId: string) => {
+    setKpis(null)
+    const { data } = await supabase
+      .from('deliveries')
+      .select('id, total_cip_usd, delivery_date, invoice_date')
+      .eq('supplier_id', supplierId)
+    if (data) {
+      const sorted = [...data].sort((a, b) =>
+        (b.delivery_date ?? b.invoice_date ?? '').localeCompare(a.delivery_date ?? a.invoice_date ?? ''),
+      )
+      setKpis({
+        deliveries: data.length,
+        totalCipUsd: data.reduce((s, d) => s + (d.total_cip_usd ?? 0), 0),
+        lastDelivery: sorted[0]?.delivery_date ?? sorted[0]?.invoice_date ?? null,
+      })
+    }
+  }, [])
+
   const openCreate = () => {
     setEditing(null)
     setForm(EMPTY_FORM)
@@ -47,6 +69,7 @@ export function Suppliers() {
 
   const openEdit = (s: Supplier) => {
     setEditing(s)
+    fetchKpis(s.id)
     setForm({
       name: s.name,
       country: s.country,
@@ -159,6 +182,26 @@ export function Suppliers() {
         onClose={() => setPanelOpen(false)}
       >
         <div className="flex flex-col gap-4">
+          {editing && (
+            <div className="grid grid-cols-3 gap-2 rounded-lg bg-gray-50 border border-gray-200 p-3">
+              <div className="text-center">
+                <p className="text-lg font-bold text-gray-900">{kpis?.deliveries ?? '—'}</p>
+                <p className="text-xs text-gray-500">Deliveries</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-gray-900">
+                  {kpis ? `$${Math.round(kpis.totalCipUsd).toLocaleString()}` : '—'}
+                </p>
+                <p className="text-xs text-gray-500">Total CIP (USD)</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-gray-700">
+                  {kpis?.lastDelivery ? new Date(kpis.lastDelivery).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—'}
+                </p>
+                <p className="text-xs text-gray-500">Last Delivery</p>
+              </div>
+            </div>
+          )}
           <Input
             label="Name"
             value={form.name}

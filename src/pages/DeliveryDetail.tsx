@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { Plus, Pencil, Trash2, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Plus, Pencil, Trash2, RefreshCw, CheckCircle, AlertTriangle, ShoppingCart } from 'lucide-react'
 import { useDelivery } from '../hooks/useDeliveries'
 import { useDeliveryItems } from '../hooks/useDeliveryItems'
 import { useDeliveryCosts } from '../hooks/useDeliveryCosts'
@@ -25,7 +25,7 @@ import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { formatDate, formatUSD, formatUZS, formatPct, formatNumber } from '../lib/formatters'
 
-type Tab = 'items' | 'costs' | 'landed' | 'pricing' | 'timeline' | 'commissions'
+type Tab = 'items' | 'costs' | 'landed' | 'pricing' | 'timeline' | 'commissions' | 'sales'
 
 const STATUS_BADGE_MAP: Record<string, 'neutral' | 'info' | 'indigo' | 'warning' | 'orange' | 'teal' | 'success'> = {
   ordered: 'neutral', invoiced: 'info', paid: 'indigo',
@@ -97,6 +97,58 @@ export function DeliveryDetail() {
 
   // Landed cost recalculate state
   const [recalculating, setRecalculating] = useState(false)
+
+  // Track if costs changed since last landed-cost recalc
+  const [costsModified, setCostsModified] = useState(false)
+
+  // Sales for this delivery (Items tab available-qty + Sales tab)
+  const [deliverySales, setDeliverySales] = useState<{
+    id: string; delivery_item_id: string; sale_date: string; quantity: number
+    real_price_per_pack: number; total_real_usd: number | null
+    payment_status: string; payment_terms: string
+    dealer_name: string | null; product_name: string | null
+  }[]>([])
+  const [salesLoading, setSalesLoading] = useState(false)
+
+  const fetchDeliverySales = useCallback(async () => {
+    if (!items.length) return
+    setSalesLoading(true)
+    const { data } = await supabase
+      .from('sales')
+      .select(`id, delivery_item_id, sale_date, quantity, real_price_per_pack,
+               total_real_usd, payment_status, payment_terms,
+               dealer:dealers(name),
+               delivery_item:delivery_items(product:products(name))`)
+      .in('delivery_item_id', items.map((i) => i.id))
+      .order('sale_date', { ascending: false })
+    setDeliverySales(
+      (data ?? []).map((r) => {
+        const dealer = Array.isArray(r.dealer) ? r.dealer[0] : r.dealer
+        const di = Array.isArray(r.delivery_item) ? r.delivery_item[0] : r.delivery_item
+        const product = di ? (Array.isArray((di as Record<string,unknown>).product) ? ((di as Record<string,unknown>).product as {name:string}[])[0] : (di as Record<string,unknown>).product) : null
+        return {
+          id: r.id,
+          delivery_item_id: r.delivery_item_id,
+          sale_date: r.sale_date,
+          quantity: r.quantity,
+          real_price_per_pack: r.real_price_per_pack,
+          total_real_usd: r.total_real_usd,
+          payment_status: r.payment_status,
+          payment_terms: r.payment_terms,
+          dealer_name: (dealer as {name:string} | null)?.name ?? null,
+          product_name: (product as {name:string} | null)?.name ?? null,
+        }
+      }),
+    )
+    setSalesLoading(false)
+  }, [items])
+
+  useEffect(() => { fetchDeliverySales() }, [fetchDeliverySales])
+
+  const soldByItem = new Map<string, number>()
+  for (const s of deliverySales) {
+    soldByItem.set(s.delivery_item_id, (soldByItem.get(s.delivery_item_id) ?? 0) + s.quantity)
+  }
 
   const productOptions = products.map((p) => ({
     value: p.id,
@@ -212,7 +264,7 @@ export function DeliveryDetail() {
       ? await updateCost(editingCost.id, payload as DeliveryCostUpdate)
       : await createCost({ ...payload, delivery_id: id })
     setSavingCost(false)
-    if (ok) setCostPanelOpen(false)
+    if (ok) { setCostPanelOpen(false); setCostsModified(true) }
   }
 
   const handleDeleteCost = async () => {
@@ -221,6 +273,7 @@ export function DeliveryDetail() {
     await removeCost(deleteCost.id)
     setDeletingCost(false)
     setDeleteCost(null)
+    setCostsModified(true)
   }
 
   // ── Commission handlers ───────────────────────────────────────────────────────
@@ -298,6 +351,7 @@ export function DeliveryDetail() {
           .eq('id', r.item_id)
       }
       await refetchItems()
+      setCostsModified(false)
       toast('success', 'Landed costs recalculated')
     } catch {
       toast('error', 'Recalculation failed')
@@ -358,7 +412,7 @@ export function DeliveryDetail() {
       {/* Tabs */}
       <div className="border-b border-gray-200">
         <nav className="flex gap-1 -mb-px">
-          {(['items', 'costs', 'landed', 'pricing', 'timeline', 'commissions'] as Tab[]).map((tab) => (
+          {(['items', 'costs', 'landed', 'pricing', 'timeline', 'commissions', 'sales'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -369,13 +423,31 @@ export function DeliveryDetail() {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
               ].join(' ')}
             >
-              {tab === 'landed' ? 'Landed Cost' : tab === 'commissions'
-                ? `Commissions${commissions.length > 0 ? ` (${commissions.length})` : ''}`
+              {tab === 'landed' ? 'Landed Cost'
+                : tab === 'commissions' ? `Commissions${commissions.length > 0 ? ` (${commissions.length})` : ''}`
+                : tab === 'sales' ? `Sales${deliverySales.length > 0 ? ` (${deliverySales.length})` : ''}`
                 : tab}
             </button>
           ))}
         </nav>
       </div>
+
+      {/* ── Stale cost warning banner ── */}
+      {costsModified && (
+        <div className="flex items-center gap-3 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-2.5 text-sm">
+          <AlertTriangle size={16} className="text-yellow-600 shrink-0" />
+          <span className="text-yellow-800 font-medium">Costs changed</span>
+          <span className="text-yellow-700">— landed costs and pricing may be stale.</span>
+          <button
+            onClick={handleRecalculate}
+            disabled={recalculating}
+            className="ml-auto flex items-center gap-1.5 rounded-md bg-yellow-600 px-3 py-1 text-xs font-semibold text-white hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw size={12} className={recalculating ? 'animate-spin' : ''} />
+            Recalculate now
+          </button>
+        </div>
+      )}
 
       {/* ── Items Tab ── */}
       {activeTab === 'items' && (
@@ -395,17 +467,22 @@ export function DeliveryDetail() {
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Total CIP</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Test Packs</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Sellable</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Sold</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Avail.</th>
                   <th className="px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">Notes</th>
                   <th className="w-20" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {itemsLoading ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Loading...</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">Loading...</td></tr>
                 ) : items.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No items yet. Add the first invoice line.</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">No items yet. Add the first invoice line.</td></tr>
                 ) : (
-                  items.map((item) => (
+                  items.map((item) => {
+                    const sold = soldByItem.get(item.id) ?? 0
+                    const avail = Math.max(0, (item.sellable_qty ?? 0) - sold)
+                    return (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-900">{item.product?.name ?? '—'}</div>
@@ -416,6 +493,12 @@ export function DeliveryDetail() {
                       <td className="px-4 py-3 text-right font-medium text-gray-900">{formatUSD(item.total_cip_usd)}</td>
                       <td className="px-4 py-3 text-right text-gray-600">{item.test_packs_qty}</td>
                       <td className="px-4 py-3 text-right text-gray-600">{item.sellable_qty ?? '—'}</td>
+                      <td className="px-4 py-3 text-right text-gray-600">{sold > 0 ? sold : <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-3 text-right font-semibold">
+                        <span className={avail === 0 ? 'text-red-500' : avail < 10 ? 'text-yellow-600' : 'text-emerald-700'}>
+                          {avail}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-gray-500 text-xs max-w-[120px] truncate">{item.notes ?? '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
@@ -424,7 +507,7 @@ export function DeliveryDetail() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                  )})
                 )}
               </tbody>
               {items.length > 0 && (
@@ -434,7 +517,7 @@ export function DeliveryDetail() {
                     <td className="px-4 py-3 text-right font-semibold">{formatNumber(items.reduce((s, i) => s + i.quantity, 0))}</td>
                     <td />
                     <td className="px-4 py-3 text-right font-semibold">{formatUSD(items.reduce((s, i) => s + i.total_cip_usd, 0))}</td>
-                    <td colSpan={4} />
+                    <td colSpan={6} />
                   </tr>
                 </tfoot>
               )}
@@ -764,6 +847,85 @@ export function DeliveryDetail() {
               )}
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ── Sales Tab ── */}
+      {activeTab === 'sales' && (
+        <div className="flex flex-col gap-4">
+          {salesLoading ? (
+            <div className="py-10 text-center text-sm text-gray-400">Loading sales…</div>
+          ) : deliverySales.length === 0 ? (
+            <div className="rounded-lg border border-gray-200 bg-white py-12 flex flex-col items-center gap-2">
+              <ShoppingCart size={32} className="text-gray-300" />
+              <p className="text-sm text-gray-400">No sales recorded for this delivery yet.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  {deliverySales.length} sale{deliverySales.length !== 1 ? 's' : ''} ·{' '}
+                  <span className="font-medium text-gray-800">
+                    {formatUSD(deliverySales.reduce((s, r) => s + (r.total_real_usd ?? r.quantity * r.real_price_per_pack), 0))} total revenue
+                  </span>
+                </p>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      {['Date', 'Dealer', 'Product', 'Qty', 'Price/Pack', 'Total USD', 'Terms', 'Status'].map((h) => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {deliverySales.map((s) => (
+                      <tr key={s.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(s.sale_date)}</td>
+                        <td className="px-4 py-3 font-medium text-gray-900">{s.dealer_name ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-600">{s.product_name ?? '—'}</td>
+                        <td className="px-4 py-3 text-right font-medium text-gray-900">{s.quantity.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">{formatUSD(s.real_price_per_pack)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                          {formatUSD(s.total_real_usd ?? s.quantity * s.real_price_per_pack)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                          {s.payment_terms === 'prepayment' ? 'Prepay'
+                            : s.payment_terms === 'deferred_30' ? 'Net 30'
+                            : s.payment_terms === 'deferred_60' ? 'Net 60'
+                            : 'Net 90'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={[
+                            'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                            s.payment_status === 'paid' ? 'bg-green-100 text-green-800'
+                              : s.payment_status === 'partial' ? 'bg-orange-100 text-orange-800'
+                              : 'bg-yellow-100 text-yellow-800',
+                          ].join(' ')}>
+                            {s.payment_status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
+                      <td colSpan={3} className="px-4 py-3 text-gray-700">Total</td>
+                      <td className="px-4 py-3 text-right text-gray-900">
+                        {deliverySales.reduce((s, r) => s + r.quantity, 0).toLocaleString()}
+                      </td>
+                      <td />
+                      <td className="px-4 py-3 text-right text-gray-900">
+                        {formatUSD(deliverySales.reduce((s, r) => s + (r.total_real_usd ?? r.quantity * r.real_price_per_pack), 0))}
+                      </td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 

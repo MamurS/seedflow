@@ -148,6 +148,31 @@ export function PnL() {
       .filter((r) => r.revenue > 0 || r.cogs > 0 || r.allocated_opex > 0 || r.commissions > 0)
   }, [deliveries, allItems, allSales, allAllocations, allCommissions, filterSale, filterAlloc])
 
+  // Last 6 months trend data (computed independently of period selector)
+  const trendData = useMemo(() => {
+    const itemMap = new Map<string, DeliveryItem>(allItems.map((i) => [i.id, i]))
+    const months: { label: string; ym: string }[] = []
+    const now = new Date()
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      months.push({ label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), ym })
+    }
+    return months.map(({ label, ym }) => {
+      let revenue = 0; let cogs = 0
+      for (const s of allSales) {
+        if (!s.sale_date.startsWith(ym)) continue
+        revenue += s.total_real_usd ?? s.quantity * s.real_price_per_pack
+        const item = itemMap.get(s.delivery_item_id)
+        cogs += (item?.landed_cost_usd ?? 0) * s.quantity
+      }
+      const allocations = allAllocations.filter((a) => a.month === ym).reduce((s, a) => s + a.allocated_amount_usd, 0)
+      return { label, revenue, net: revenue - cogs - allocations }
+    })
+  }, [allSales, allItems, allAllocations])
+
+  const trendMax = useMemo(() => Math.max(...trendData.map((d) => d.revenue), 1), [trendData])
+
   const totals = useMemo(() => ({
     revenue: pnlRows.reduce((s, r) => s + r.revenue, 0),
     cogs: pnlRows.reduce((s, r) => s + r.cogs, 0),
@@ -201,6 +226,38 @@ export function PnL() {
           Export to Excel
         </Button>
       </div>
+
+      {/* 6-month trend chart */}
+      {!loading && trendData.some((d) => d.revenue > 0) && (
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Revenue vs Net Profit — Last 6 Months</p>
+          <div className="flex items-end gap-3 h-32">
+            {trendData.map((d) => (
+              <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
+                <div className="w-full flex flex-col justify-end gap-0.5" style={{ height: '96px' }}>
+                  <div
+                    className="w-full rounded-t bg-[#1a56db] opacity-80 min-h-[2px]"
+                    style={{ height: `${(d.revenue / trendMax) * 96}px` }}
+                    title={`Revenue: $${Math.round(d.revenue).toLocaleString()}`}
+                  />
+                  {d.net > 0 && (
+                    <div
+                      className="w-full rounded-t bg-emerald-500 opacity-90 absolute"
+                      style={{ height: `${(d.net / trendMax) * 96}px`, position: 'relative', marginTop: '2px' }}
+                      title={`Net: $${Math.round(d.net).toLocaleString()}`}
+                    />
+                  )}
+                </div>
+                <span className="text-xs text-gray-500 whitespace-nowrap">{d.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-4 mt-2">
+            <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-sm bg-[#1a56db] opacity-80" /><span className="text-xs text-gray-500">Revenue</span></div>
+            <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-sm bg-emerald-500" /><span className="text-xs text-gray-500">Net Profit</span></div>
+          </div>
+        </div>
+      )}
 
       {/* Period selector */}
       <div className="flex flex-wrap items-end gap-3 rounded-lg bg-white border border-gray-200 p-4">

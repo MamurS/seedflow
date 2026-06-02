@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, X } from 'lucide-react'
 import { useDeliveries } from '../hooks/useDeliveries'
 import { supabase } from '../lib/supabase'
 import { toast } from '../components/ui/Toast'
@@ -58,6 +58,16 @@ export function Deliveries() {
 
   const supplierOptions = suppliers.map((s) => ({ value: s.id, label: s.name }))
   const statusOptions = DELIVERY_STATUSES
+
+  // Quick filter state
+  const [filterSupplier, setFilterSupplier] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+
+  const filteredDeliveries = useMemo(() => deliveries.filter((d) => {
+    if (filterSupplier && d.supplier_id !== filterSupplier) return false
+    if (filterStatus && d.status !== filterStatus) return false
+    return true
+  }), [deliveries, filterSupplier, filterStatus])
 
   const openCreate = () => {
     setEditing(null)
@@ -231,21 +241,49 @@ export function Deliveries() {
         <div>
           <Breadcrumb items={[{ label: 'Deliveries' }]} />
           <h1 className="mt-2 text-xl font-semibold text-gray-900">Deliveries</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{deliveries.length} delivery{deliveries.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-gray-500 mt-0.5">{filteredDeliveries.length} of {deliveries.length} deliver{deliveries.length !== 1 ? 'ies' : 'y'}</p>
         </div>
         <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={openCreate}>
           New Delivery
         </Button>
       </div>
 
+      {/* Quick filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <select
+          value={filterSupplier}
+          onChange={(e) => setFilterSupplier(e.target.value)}
+          className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">All Suppliers</option>
+          {supplierOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">All Statuses</option>
+          {statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        {(filterSupplier || filterStatus) && (
+          <button
+            onClick={() => { setFilterSupplier(''); setFilterStatus('') }}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
+          >
+            <X size={12} /> Clear filters
+          </button>
+        )}
+      </div>
+
       <Table
         columns={columns}
-        data={deliveries}
+        data={filteredDeliveries}
         loading={loading}
         rowKey="id"
         onRowClick={(r) => navigate(`/deliveries/${r.id}`)}
         searchKeys={['invoice_number']}
-        emptyMessage="No deliveries yet. Create your first delivery."
+        emptyMessage="No deliveries match your filters."
       />
 
       {/* Add / Edit Panel */}
